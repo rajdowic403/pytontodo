@@ -88,35 +88,36 @@ class TodoApp:
     
     def load_tasks(self):
         self.tasks_list.delete(*self.tasks_list.get_children())
-        
+
         conn = get_connection()
         if conn:
             try:
                 cursor = conn.cursor(dictionary=True)
                 
+                # Zmieniony filtr na podstawie stanu checkboxa 'show_completed'
                 query = """
                 SELECT t.id, t.title, c.name as category, t.is_completed, 
-                       DATE_FORMAT(t.created_at, '%%Y-%%m-%%d %%H:%%i') as created_date
+                       DATE_FORMAT(t.created_at, '%Y-%m-%d %H:%i') as created_date
                 FROM tasks t 
                 LEFT JOIN categories c ON t.category_id = c.id
-                WHERE %s OR t.is_completed = %s
+                WHERE (%s OR t.is_completed = %s)
                 """
-                params = [True, self.show_completed.get()]
-                
+                params = [self.show_completed.get(), self.show_completed.get()]
+
                 if self.category_var.get() != "Wszystkie kategorie":
                     query += " AND c.name = %s"
                     params.append(self.category_var.get())
-                
-                query += " ORDER BY t.created_at DESC"
-                
+
+                query += " ORDER BY c.name, t.created_at DESC"
+
                 cursor.execute(query, params)
-                
+
                 for task in cursor.fetchall():
                     status = "✔️" if task['is_completed'] else "❌"
                     self.tasks_list.insert("", tk.END, 
-                                         values=(task['title'], task['category'], status, task['created_date']), 
-                                         iid=task['id'])
-                
+                                           values=(task['title'], task['category'], status, task['created_date']), 
+                                           iid=task['id'])
+            
             except SystemError as e:
                 messagebox.showerror("Błąd", f"Nie można załadować zadań: {e}")
             finally:
@@ -139,7 +140,7 @@ class TodoApp:
                     cursor.execute("SELECT id FROM categories WHERE name = %s", (category,))
                     category_id = cursor.fetchone()[0]
                     
-                    cursor.execute("""
+                    cursor.execute(""" 
                     INSERT INTO tasks (title, description, category_id)
                     VALUES (%s, %s, %s)
                     """, (title, description, category_id))
@@ -265,12 +266,13 @@ class TodoApp:
                 ttk.Label(edit_window, text="Kategoria:").pack(pady=5)
                 category_var = tk.StringVar(value=task['category'])
                 
+                cursor = conn.cursor()
                 cursor.execute("SELECT name FROM categories ORDER BY name")
                 categories = [row[0] for row in cursor.fetchall()]
                 category_combobox = ttk.Combobox(edit_window, textvariable=category_var, 
                                                values=categories, state="readonly")
+                category_combobox.current(0)
                 category_combobox.pack(pady=5)
-                
                 ttk.Button(edit_window, text="Zapisz zmiany", command=save_changes).pack(pady=10)
                 
             except SystemError as e:
